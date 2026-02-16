@@ -14,6 +14,7 @@ const defaultConfig: AppConfig = {
   appName: "Sharfin's Store",
   appLogo: "", 
   notice: "Welcome to Sharfin's Store! Instant Top-Up Available.",
+  aiApiKey: "", // Initial empty key
   banners: ['https://picsum.photos/800/300?random=10'],
   paymentMethods: {
     bkash: '01700000000',

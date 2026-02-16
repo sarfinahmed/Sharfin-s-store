@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { Product, AppConfig } from "../types";
 
@@ -20,9 +21,12 @@ export const generateSupportResponse = async (
   config: AppConfig,
   products: Product[]
 ): Promise<string> => {
-  if (!process.env.API_KEY) return "I'm sorry, my brain is offline (API Key missing).";
+  // Use API key from admin settings (config) or fallback to env variable
+  const apiKey = config.aiApiKey || process.env.API_KEY;
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  if (!apiKey) return "I'm sorry, my brain is offline (API Key missing). Please contact admin.";
+
+  const ai = new GoogleGenAI({ apiKey });
   
   const productContext = products.map(p => 
     `${p.name} (${p.type}): ${p.packages.map(pkg => `${pkg.name} - ${pkg.price} BDT`).join(', ')}`
