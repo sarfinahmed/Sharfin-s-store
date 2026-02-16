@@ -5,13 +5,13 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
-  // We cast process to any to avoid TypeScript errors if @types/node is missing
+  // Using (process as any) to avoid TypeScript error if @types/node is missing
   const env = loadEnv(mode, (process as any).cwd(), '');
 
   return {
     plugins: [react()],
     define: {
-      // Basic support for process.env.API_KEY usage in the app
+      // Allow usage of process.env.API_KEY in the code
       'process.env.API_KEY': JSON.stringify(env.API_KEY)
     }
   };
