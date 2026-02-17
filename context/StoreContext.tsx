@@ -2,7 +2,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Product, Order, AppConfig, StoreContextType, OrderStatus, OrderItem, AuthResponse } from '../types';
 import { auth, db } from '../services/firebase';
-import * as firebaseAuth from 'firebase/auth';
+import { 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut 
+} from '@firebase/auth';
 import { 
   collection, 
   doc, 
@@ -11,21 +16,13 @@ import {
   deleteDoc, 
   onSnapshot, 
   getDoc 
-} from 'firebase/firestore';
-
-const { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut 
-} = firebaseAuth;
+} from '@firebase/firestore';
 
 // Mock Data Defaults (Used for initial seeding only)
 const defaultConfig: AppConfig = {
   appName: "Sharfin's Store",
   appLogo: "", 
   notice: "Welcome to Sharfin's Store! Instant Top-Up Available.",
-  aiApiKey: "", 
   banners: [
     'https://picsum.photos/1200/600?random=1',
     'https://picsum.photos/1200/600?random=2',
@@ -131,7 +128,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // 5. Auth State Listener & User Sync
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: any) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         // Fetch or Create user in Firestore
         const userRef = doc(db, 'users', firebaseUser.uid);

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useStore } from '../../context/StoreContext';
-import { Save, Lock, Shield, Plus, Trash2, Layout, Tag, Image as ImageIcon, Phone, MapPin, Globe, Gift, Sparkles, Key } from 'lucide-react';
+import { Save, Tag, Image as ImageIcon, Phone, Layout, Globe, Gift, Plus, Trash2, Sparkles } from 'lucide-react';
 import { HomeSection, ProductType } from '../../types';
 
 const AdminSettings: React.FC = () => {
@@ -149,32 +149,6 @@ const AdminSettings: React.FC = () => {
             className="w-full bg-dark-950 text-white rounded-xl border border-slate-700 px-4 py-3 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition"
             rows={3}
           />
-        </div>
-      </div>
-
-      {/* AI Settings */}
-      <div className="bg-slate-900 p-8 rounded-2xl shadow-lg border border-white/5 space-y-6">
-        <h2 className="font-bold text-xl text-white flex items-center gap-2">
-            <Sparkles size={20} className="text-brand-500" /> AI Assistant Settings
-        </h2>
-        <div>
-          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Gemini API Key</label>
-          <div className="relative">
-            <input 
-              type="password" 
-              name="aiApiKey" 
-              value={formData.aiApiKey || ''} 
-              onChange={handleChange}
-              placeholder="AIzaSy..."
-              className="w-full bg-dark-950 text-white rounded-xl border border-slate-700 px-4 py-3 pl-10 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition font-mono"
-            />
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600">
-               <Key size={16} />
-            </div>
-          </div>
-          <p className="text-xs text-slate-500 mt-3">
-            Required for the Support Chatbot. Get your key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-brand-400 hover:text-brand-300 font-bold hover:underline transition">Google AI Studio</a>.
-          </p>
         </div>
       </div>
       

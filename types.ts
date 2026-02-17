@@ -83,7 +83,6 @@ export interface AppConfig {
   appName: string;
   appLogo: string;
   notice: string;
-  aiApiKey?: string; // Added field for Gemini API Key
   banners: string[];
   paymentMethods: {
     bkash: string;

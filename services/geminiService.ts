@@ -21,8 +21,8 @@ export const generateSupportResponse = async (
   config: AppConfig,
   products: Product[]
 ): Promise<string> => {
-  // Use API key from admin settings (config) or fallback to env variable
-  const apiKey = config.aiApiKey || process.env.API_KEY;
+  // Use API key exclusively from environment variable as per guidelines
+  const apiKey = process.env.API_KEY;
 
   if (!apiKey) return "I'm sorry, my brain is offline (API Key missing). Please contact admin.";
 
