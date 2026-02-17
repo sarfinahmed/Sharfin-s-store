@@ -1,6 +1,7 @@
 
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import * as firebaseAuth from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAqIi0loPJbjs7s7DHyPJaq7oHLAei-K_c",
@@ -14,8 +15,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// Export Auth only (Real Firebase Auth)
-export const auth = getAuth(app);
+// Export Auth
+export const auth = firebaseAuth.getAuth(app);
 
-// Keep DB as mock object to avoid Firestore errors
-export const db = {} as any;
+// Export Firestore Database
+export const db = getFirestore(app);

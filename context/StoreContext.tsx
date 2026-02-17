@@ -1,15 +1,26 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Product, Order, AppConfig, StoreContextType, OrderStatus, OrderItem, AuthResponse, UserRole } from '../types';
-import { auth } from '../services/firebase';
+import { User, Product, Order, AppConfig, StoreContextType, OrderStatus, OrderItem, AuthResponse } from '../types';
+import { auth, db } from '../services/firebase';
+import * as firebaseAuth from 'firebase/auth';
 import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged
-} from 'firebase/auth';
+  collection, 
+  doc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  onSnapshot, 
+  getDoc 
+} from 'firebase/firestore';
 
-// Mock Data Defaults
+const {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut
+} = firebaseAuth;
+
+// Mock Data Defaults (Used for initial seeding only)
 const defaultConfig: AppConfig = {
   appName: "Sharfin's Store",
   appLogo: "", 
@@ -62,20 +73,6 @@ const defaultProducts: Product[] = [
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
-// Helper for local storage
-const getStorage = <T,>(key: string, defaultValue: T): T => {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
-  } catch {
-    return defaultValue;
-  }
-};
-
-const setStorage = (key: string, value: any) => {
-  localStorage.setItem(key, JSON.stringify(value));
-};
-
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,52 +82,75 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
   const [allUsers, setAllUsers] = useState<User[]>([]);
 
-  // Load Data on Mount
+  // 1. Listen to Configuration
   useEffect(() => {
-    const loadData = async () => {
-      let storedConfig = getStorage('sharfin_config', defaultConfig);
-      
-      // Migration Fix: If user has the old single banner, reset to new default 3 banners
-      if (storedConfig.banners.length === 1 && storedConfig.banners[0].includes('random=10')) {
-          storedConfig.banners = defaultConfig.banners;
+    const docRef = doc(db, 'settings', 'appConfig');
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setConfig(docSnap.data() as AppConfig);
+      } else {
+        // Seed default config if not exists
+        setDoc(docRef, defaultConfig);
       }
-
-      const storedProducts = getStorage('sharfin_products', defaultProducts);
-      const storedOrders = getStorage('sharfin_orders', []);
-      const storedUsers = getStorage('sharfin_users', []);
-
-      setConfig(storedConfig);
-      setProducts(storedProducts);
-      setOrders(storedOrders);
-      setAllUsers(storedUsers);
-    };
-    loadData();
+    });
+    return () => unsubscribe();
   }, []);
 
-  // Auth State Listener
+  // 2. Listen to Products
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        const storedUsers = getStorage<User[]>('sharfin_users', []);
-        let appUser = storedUsers.find(u => u.id === firebaseUser.uid);
+    const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
+      const prods = snapshot.docs.map(doc => doc.data() as Product);
+      if (prods.length === 0) {
+        // Seed default products if empty so the app isn't blank
+        defaultProducts.forEach(p => setDoc(doc(db, 'products', p.id), p));
+      }
+      setProducts(prods);
+    });
+    return () => unsubscribe();
+  }, []);
 
-        if (!appUser) {
-          appUser = {
+  // 3. Listen to Orders
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
+      const orderList = snapshot.docs.map(doc => doc.data() as Order);
+      // Sort by date desc
+      orderList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setOrders(orderList);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 4. Listen to All Users (Admin usage mostly)
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const userList = snapshot.docs.map(doc => doc.data() as User);
+      setAllUsers(userList);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 5. Auth State Listener & User Sync
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Fetch or Create user in Firestore
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          setUser(userSnap.data() as User);
+        } else {
+          // Create new user doc
+          const newUser: User = {
             id: firebaseUser.uid,
             name: firebaseUser.displayName || 'User',
             email: firebaseUser.email || '',
             role: firebaseUser.email === 'admin@sharfin.com' ? 'admin' : 'user',
             balance: 0
           };
-          setAllUsers(prev => [...prev, appUser!]);
-          setStorage('sharfin_users', [...storedUsers, appUser]);
+          await setDoc(userRef, newUser);
+          setUser(newUser);
         }
-        
-        if (appUser.email === 'admin@sharfin.com' && appUser.role !== 'admin') {
-           appUser.role = 'admin';
-        }
-
-        setUser(appUser);
       } else {
         setUser(null);
       }
@@ -140,17 +160,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return () => unsubscribe();
   }, []);
 
-  // Persist Data
-  useEffect(() => {
-    if (!loading) {
-      setStorage('sharfin_config', config);
-      setStorage('sharfin_products', products);
-      setStorage('sharfin_orders', orders);
-      setStorage('sharfin_users', allUsers);
-    }
-  }, [config, products, orders, allUsers, loading]);
 
-  // Actions
+  // --- Actions ---
+
   const login = async (email: string, password?: string): Promise<AuthResponse> => {
     try {
       if (!password) throw new Error("Password required");
@@ -166,6 +178,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       if (!password) throw new Error("Password required");
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
       const newUser: User = {
         id: userCredential.user.uid,
         name,
@@ -174,10 +187,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         balance: 0
       };
 
-      setAllUsers(prev => [...prev, newUser]);
-      const currentUsers = getStorage<User[]>('sharfin_users', []);
-      setStorage('sharfin_users', [...currentUsers, newUser]);
-
+      // Save to Firestore
+      await setDoc(doc(db, 'users', newUser.id), newUser);
+      
       return { success: true };
     } catch (error: any) {
       console.error("Registration failed", error);
@@ -191,14 +203,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const updateUser = async (userId: string, data: Partial<User>) => {
-    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, ...data } : u));
-    if (user && user.id === userId) {
-      setUser(prev => prev ? { ...prev, ...data } : null);
-    }
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, data);
+    // Local state updates automatically via onSnapshot
   };
 
   const deleteUser = async (userId: string) => {
-    setAllUsers(prev => prev.filter(u => u.id !== userId));
+    await deleteDoc(doc(db, 'users', userId));
   };
 
   const placeOrder = async (
@@ -209,20 +220,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     paymentData?: { trxId?: string; sender?: string }
   ) => {
     if (!user) return { success: false, message: 'Please login first' };
-    await new Promise(r => setTimeout(r, 800));
 
     const product = products.find(p => p.id === productId);
     if (!product) return { success: false, message: 'Product not found' };
 
     const totalPrice = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
+    // Handle Wallet Balance Deduction
     if (paymentMethod === 'wallet') {
       if (user.balance < totalPrice) {
         return { success: false, message: 'Insufficient wallet balance' };
       }
-      const updatedUser = { ...user, balance: user.balance - totalPrice };
-      setUser(updatedUser);
-      setAllUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
+      // Update balance in Firestore
+      const userRef = doc(db, 'users', user.id);
+      await updateDoc(userRef, { balance: user.balance - totalPrice });
     }
 
     const newOrder: Order = {
@@ -241,13 +252,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       senderNumber: paymentData?.sender,
     };
 
-    setOrders(prev => [newOrder, ...prev]);
+    // Save Order to Firestore
+    await setDoc(doc(db, 'orders', newOrder.id), newOrder);
+
     return { success: true, message: 'Order placed successfully!' };
   };
 
   const deposit = async (amount: number, method: string, trxId: string) => {
     if (!user) return;
-    await new Promise(r => setTimeout(r, 500));
     
     const newOrder: Order = {
       id: Math.random().toString(36).substr(2, 9).toUpperCase(),
@@ -261,55 +273,53 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       details: { method, trxId }
     };
 
-    setOrders(prev => [newOrder, ...prev]);
+    await setDoc(doc(db, 'orders', newOrder.id), newOrder);
   };
 
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
-    await new Promise(r => setTimeout(r, 400));
+    const orderRef = doc(db, 'orders', orderId);
     const order = orders.find(o => o.id === orderId);
+    
     if (!order) return;
 
+    // Handle Deposit Approval
     if (order.type === 'deposit' && order.status === 'pending' && status === 'completed') {
+       const userRef = doc(db, 'users', order.userId);
        const targetUser = allUsers.find(u => u.id === order.userId);
        if (targetUser) {
-          const updatedUser = { ...targetUser, balance: targetUser.balance + order.price };
-          setAllUsers(prev => prev.map(u => u.id === targetUser.id ? updatedUser : u));
-          if (user && user.id === targetUser.id) setUser(updatedUser);
+          await updateDoc(userRef, { balance: targetUser.balance + order.price });
        }
     }
     
+    // Handle Refund on Cancellation (Wallet only)
     if (order.type === 'purchase' && status === 'cancelled' && order.status !== 'cancelled') {
         if (order.paymentMethod === 'wallet') {
+          const userRef = doc(db, 'users', order.userId);
           const targetUser = allUsers.find(u => u.id === order.userId);
           if (targetUser) {
-              const updatedUser = { ...targetUser, balance: targetUser.balance + order.price };
-              setAllUsers(prev => prev.map(u => u.id === targetUser.id ? updatedUser : u));
-              if (user && user.id === targetUser.id) setUser(updatedUser);
+              await updateDoc(userRef, { balance: targetUser.balance + order.price });
           }
         }
     }
 
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    await updateDoc(orderRef, { status });
   };
 
   const updateConfig = async (newConfig: Partial<AppConfig>) => {
-    await new Promise(r => setTimeout(r, 500));
-    setConfig(prev => ({ ...prev, ...newConfig }));
+    const configRef = doc(db, 'settings', 'appConfig');
+    await setDoc(configRef, { ...config, ...newConfig });
   };
 
   const addProduct = async (product: Product) => {
-    await new Promise(r => setTimeout(r, 500));
-    setProducts(prev => [...prev, product]);
+    await setDoc(doc(db, 'products', product.id), product);
   };
   
   const updateProduct = async (id: string, updatedProduct: Product) => {
-    await new Promise(r => setTimeout(r, 500));
-    setProducts(prev => prev.map(p => p.id === id ? updatedProduct : p));
+    await setDoc(doc(db, 'products', id), updatedProduct);
   };
   
   const deleteProduct = async (id: string) => {
-    await new Promise(r => setTimeout(r, 300));
-    setProducts(prev => prev.filter(p => p.id !== id));
+    await deleteDoc(doc(db, 'products', id));
   };
 
   return (
