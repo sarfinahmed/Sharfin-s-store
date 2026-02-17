@@ -14,8 +14,12 @@ const defaultConfig: AppConfig = {
   appName: "Sharfin's Store",
   appLogo: "", 
   notice: "Welcome to Sharfin's Store! Instant Top-Up Available.",
-  aiApiKey: "", // Initial empty key
-  banners: ['https://picsum.photos/800/300?random=10'],
+  aiApiKey: "", 
+  banners: [
+    'https://picsum.photos/1200/600?random=1',
+    'https://picsum.photos/1200/600?random=2',
+    'https://picsum.photos/1200/600?random=3'
+  ],
   paymentMethods: {
     bkash: '01700000000',
     nagad: '01800000000'
@@ -84,7 +88,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // Load Data on Mount
   useEffect(() => {
     const loadData = async () => {
-      const storedConfig = getStorage('sharfin_config', defaultConfig);
+      let storedConfig = getStorage('sharfin_config', defaultConfig);
+      
+      // Migration Fix: If user has the old single banner, reset to new default 3 banners
+      if (storedConfig.banners.length === 1 && storedConfig.banners[0].includes('random=10')) {
+          storedConfig.banners = defaultConfig.banners;
+      }
+
       const storedProducts = getStorage('sharfin_products', defaultProducts);
       const storedOrders = getStorage('sharfin_orders', []);
       const storedUsers = getStorage('sharfin_users', []);
@@ -101,12 +111,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        // Sync with local storage user data (since we don't use Firestore)
         const storedUsers = getStorage<User[]>('sharfin_users', []);
         let appUser = storedUsers.find(u => u.id === firebaseUser.uid);
 
         if (!appUser) {
-          // If user exists in Auth but not in LocalStorage (rare edge case), create basic profile
           appUser = {
             id: firebaseUser.uid,
             name: firebaseUser.displayName || 'User',
@@ -115,11 +123,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             balance: 0
           };
           setAllUsers(prev => [...prev, appUser!]);
-          // Also persist immediately for this session
           setStorage('sharfin_users', [...storedUsers, appUser]);
         }
         
-        // Force admin role for specific email
         if (appUser.email === 'admin@sharfin.com' && appUser.role !== 'admin') {
            appUser.role = 'admin';
         }
@@ -134,7 +140,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return () => unsubscribe();
   }, []);
 
-  // Persist Data whenever it changes
+  // Persist Data
   useEffect(() => {
     if (!loading) {
       setStorage('sharfin_config', config);
@@ -159,11 +165,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const register = async (name: string, email: string, password?: string): Promise<AuthResponse> => {
     try {
       if (!password) throw new Error("Password required");
-      
-      // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Create Local User Profile
       const newUser: User = {
         id: userCredential.user.uid,
         name,
@@ -172,7 +174,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         balance: 0
       };
 
-      // Save to local storage state immediately
       setAllUsers(prev => [...prev, newUser]);
       const currentUsers = getStorage<User[]>('sharfin_users', []);
       setStorage('sharfin_users', [...currentUsers, newUser]);
@@ -215,12 +216,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const totalPrice = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-    // Wallet Payment Logic
     if (paymentMethod === 'wallet') {
       if (user.balance < totalPrice) {
         return { success: false, message: 'Insufficient wallet balance' };
       }
-      // Deduct balance
       const updatedUser = { ...user, balance: user.balance - totalPrice };
       setUser(updatedUser);
       setAllUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
@@ -270,7 +269,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
-    // Logic for deposit approval
     if (order.type === 'deposit' && order.status === 'pending' && status === 'completed') {
        const targetUser = allUsers.find(u => u.id === order.userId);
        if (targetUser) {
@@ -280,7 +278,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
        }
     }
     
-    // Logic for refund on cancellation (if paid by wallet)
     if (order.type === 'purchase' && status === 'cancelled' && order.status !== 'cancelled') {
         if (order.paymentMethod === 'wallet') {
           const targetUser = allUsers.find(u => u.id === order.userId);

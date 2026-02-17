@@ -1,9 +1,10 @@
-import React from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { Bell, Gamepad2, ChevronRight, Zap, Flame, Gift, Trophy, Star } from 'lucide-react';
 
-const IconMap = {
+const IconMap: Record<string, any> = {
   game: Gamepad2,
   zap: Zap,
   star: Star,
@@ -14,6 +15,25 @@ const IconMap = {
 
 const Home: React.FC = () => {
   const { config, products } = useStore();
+  const [currentBanner, setCurrentBanner] = useState(0);
+
+  // Safety: Reset current banner if it exceeds array length
+  useEffect(() => {
+     if (currentBanner >= config.banners.length) {
+         setCurrentBanner(0);
+     }
+  }, [config.banners.length]);
+
+  // Auto-rotate banners (4 seconds)
+  useEffect(() => {
+    if (config.banners.length <= 1) return;
+
+    const interval = setInterval(() => {
+      setCurrentBanner(prev => (prev + 1) % config.banners.length);
+    }, 4000); // 4000ms = 4 seconds
+
+    return () => clearInterval(interval);
+  }, [config.banners]); 
 
   return (
     <div className="space-y-10">
@@ -24,16 +44,20 @@ const Home: React.FC = () => {
         <p className="text-sm font-semibold leading-relaxed relative z-10">{config.notice}</p>
       </div>
 
-      {/* Hero Banner */}
-      <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-brand-900/10 aspect-[16/8] md:aspect-[3/1] group border border-white">
-        <div className="absolute inset-0 bg-slate-200 animate-pulse"></div>
-        <img 
-          src={config.banners[0]} 
-          alt="Promo" 
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent flex items-end p-6 md:p-10">
-          <div className="max-w-2xl">
+      {/* Hero Banner Carousel */}
+      <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-brand-900/10 aspect-[16/8] md:aspect-[3/1] group border border-white bg-slate-200">
+        {config.banners.map((banner, index) => (
+          <img 
+            key={index}
+            src={banner} 
+            alt={`Promo ${index + 1}`} 
+            className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ease-in-out ${index === currentBanner ? 'opacity-100 z-10 scale-100' : 'opacity-0 z-0 scale-110'}`}
+          />
+        ))}
+        
+        {/* Dark Overlay with Text */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent flex items-end p-6 md:p-10 pointer-events-none z-20">
+          <div className="max-w-2xl pointer-events-auto">
             <span className="bg-white/90 backdrop-blur-md text-brand-700 text-xs font-bold px-3 py-1 rounded-full mb-3 inline-block shadow-lg">
               FEATURED EVENT
             </span>
@@ -44,6 +68,19 @@ const Home: React.FC = () => {
             </Link>
           </div>
         </div>
+
+        {/* Carousel Indicators */}
+        {config.banners.length > 1 && (
+          <div className="absolute bottom-6 right-6 flex gap-2 z-30">
+            {config.banners.map((_, idx) => (
+              <button 
+                key={idx}
+                onClick={() => setCurrentBanner(idx)}
+                className={`h-2 rounded-full transition-all duration-300 shadow-sm ${idx === currentBanner ? 'bg-brand-500 w-8' : 'bg-white/50 hover:bg-white w-2'}`}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Dynamic Sections */}

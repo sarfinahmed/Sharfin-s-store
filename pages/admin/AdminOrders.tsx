@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useStore } from '../../context/StoreContext';
 import { CheckCircle, XCircle, Search, Copy, Check } from 'lucide-react';
@@ -124,9 +123,9 @@ const AdminOrders: React.FC = () => {
                       return (
                         <div key={k} className="text-xs text-slate-400 mb-1.5 flex items-center gap-2 group">
                             <span className="text-slate-500 uppercase font-bold text-[10px] w-14 truncate">{k}:</span> 
-                            <span className="text-slate-300 font-mono bg-slate-800/50 px-2 py-1 rounded border border-white/5 select-all">{v}</span>
+                            <span className="text-slate-300 font-mono bg-slate-800/50 px-2 py-1 rounded border border-white/5 select-all">{v as string}</span>
                             <button 
-                                onClick={() => handleCopy(v, `${order.id}-${k}`)}
+                                onClick={() => handleCopy(v as string, `${order.id}-${k}`)}
                                 className="p-1 hover:bg-white/10 rounded transition text-slate-500 hover:text-white"
                                 title="Copy"
                             >
