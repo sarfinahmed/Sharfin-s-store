@@ -3,12 +3,6 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User, Product, Order, AppConfig, StoreContextType, OrderStatus, OrderItem, AuthResponse } from '../types';
 import { auth, db } from '../services/firebase';
 import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut 
-} from '@firebase/auth';
-import { 
   collection, 
   doc, 
   setDoc, 
@@ -16,7 +10,7 @@ import {
   deleteDoc, 
   onSnapshot, 
   getDoc 
-} from '@firebase/firestore';
+} from 'firebase/firestore';
 
 // Mock Data Defaults (Used for initial seeding only)
 const defaultConfig: AppConfig = {
@@ -128,7 +122,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // 5. Auth State Listener & User Sync
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser: any) => {
       if (firebaseUser) {
         // Fetch or Create user in Firestore
         const userRef = doc(db, 'users', firebaseUser.uid);
@@ -163,7 +157,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const login = async (email: string, password?: string): Promise<AuthResponse> => {
     try {
       if (!password) throw new Error("Password required");
-      await signInWithEmailAndPassword(auth, email, password);
+      await auth.signInWithEmailAndPassword(email, password);
       return { success: true };
     } catch (error: any) {
       console.error("Login failed", error);
@@ -174,7 +168,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const register = async (name: string, email: string, password?: string): Promise<AuthResponse> => {
     try {
       if (!password) throw new Error("Password required");
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await auth.createUserWithEmailAndPassword(email, password);
       
       const newUser: User = {
         id: userCredential.user.uid,
@@ -195,7 +189,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const logout = async () => {
-    await signOut(auth);
+    await auth.signOut();
     setUser(null);
   };
 
