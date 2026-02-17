@@ -2,15 +2,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Product, Order, AppConfig, StoreContextType, OrderStatus, OrderItem, AuthResponse } from '../types';
 import { auth, db } from '../services/firebase';
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
-  onSnapshot, 
-  getDoc 
-} from 'firebase/firestore';
 
 // Mock Data Defaults (Used for initial seeding only)
 const defaultConfig: AppConfig = {
@@ -75,13 +66,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // 1. Listen to Configuration
   useEffect(() => {
-    const docRef = doc(db, 'settings', 'appConfig');
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
+    const docRef = db.collection('settings').doc('appConfig');
+    const unsubscribe = docRef.onSnapshot((docSnap) => {
+      if (docSnap.exists) {
         setConfig(docSnap.data() as AppConfig);
       } else {
         // Seed default config if not exists
-        setDoc(docRef, defaultConfig);
+        docRef.set(defaultConfig);
       }
     });
     return () => unsubscribe();
@@ -89,11 +80,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // 2. Listen to Products
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
+    const unsubscribe = db.collection('products').onSnapshot((snapshot) => {
       const prods = snapshot.docs.map(doc => doc.data() as Product);
       if (prods.length === 0) {
         // Seed default products if empty so the app isn't blank
-        defaultProducts.forEach(p => setDoc(doc(db, 'products', p.id), p));
+        defaultProducts.forEach(p => db.collection('products').doc(p.id).set(p));
       }
       setProducts(prods);
     });
@@ -102,7 +93,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // 3. Listen to Orders
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
+    const unsubscribe = db.collection('orders').onSnapshot((snapshot) => {
       const orderList = snapshot.docs.map(doc => doc.data() as Order);
       // Sort by date desc
       orderList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -113,7 +104,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // 4. Listen to All Users (Admin usage mostly)
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
+    const unsubscribe = db.collection('users').onSnapshot((snapshot) => {
       const userList = snapshot.docs.map(doc => doc.data() as User);
       setAllUsers(userList);
     });
@@ -122,13 +113,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // 5. Auth State Listener & User Sync
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser: any) => {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
         // Fetch or Create user in Firestore
-        const userRef = doc(db, 'users', firebaseUser.uid);
-        const userSnap = await getDoc(userRef);
+        const userRef = db.collection('users').doc(firebaseUser.uid);
+        const userSnap = await userRef.get();
 
-        if (userSnap.exists()) {
+        if (userSnap.exists) {
           setUser(userSnap.data() as User);
         } else {
           // Create new user doc
@@ -139,7 +130,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             role: firebaseUser.email === 'admin@sharfin.com' ? 'admin' : 'user',
             balance: 0
           };
-          await setDoc(userRef, newUser);
+          await userRef.set(newUser);
           setUser(newUser);
         }
       } else {
@@ -171,7 +162,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const userCredential = await auth.createUserWithEmailAndPassword(email, password);
       
       const newUser: User = {
-        id: userCredential.user.uid,
+        id: userCredential.user!.uid,
         name,
         email,
         role: email === 'admin@sharfin.com' ? 'admin' : 'user',
@@ -179,7 +170,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       };
 
       // Save to Firestore
-      await setDoc(doc(db, 'users', newUser.id), newUser);
+      await db.collection('users').doc(newUser.id).set(newUser);
       
       return { success: true };
     } catch (error: any) {
@@ -194,13 +185,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const updateUser = async (userId: string, data: Partial<User>) => {
-    const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, data);
+    const userRef = db.collection('users').doc(userId);
+    await userRef.update(data);
     // Local state updates automatically via onSnapshot
   };
 
   const deleteUser = async (userId: string) => {
-    await deleteDoc(doc(db, 'users', userId));
+    await db.collection('users').doc(userId).delete();
   };
 
   const placeOrder = async (
@@ -223,8 +214,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         return { success: false, message: 'Insufficient wallet balance' };
       }
       // Update balance in Firestore
-      const userRef = doc(db, 'users', user.id);
-      await updateDoc(userRef, { balance: user.balance - totalPrice });
+      const userRef = db.collection('users').doc(user.id);
+      await userRef.update({ balance: user.balance - totalPrice });
     }
 
     const newOrder: Order = {
@@ -244,7 +235,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     // Save Order to Firestore
-    await setDoc(doc(db, 'orders', newOrder.id), newOrder);
+    await db.collection('orders').doc(newOrder.id).set(newOrder);
 
     return { success: true, message: 'Order placed successfully!' };
   };
@@ -264,53 +255,55 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       details: { method, trxId }
     };
 
-    await setDoc(doc(db, 'orders', newOrder.id), newOrder);
+    await db.collection('orders').doc(newOrder.id).set(newOrder);
   };
 
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
-    const orderRef = doc(db, 'orders', orderId);
+    const orderRef = db.collection('orders').doc(orderId);
     const order = orders.find(o => o.id === orderId);
     
     if (!order) return;
 
     // Handle Deposit Approval
     if (order.type === 'deposit' && order.status === 'pending' && status === 'completed') {
-       const userRef = doc(db, 'users', order.userId);
+       const userRef = db.collection('users').doc(order.userId);
        const targetUser = allUsers.find(u => u.id === order.userId);
        if (targetUser) {
-          await updateDoc(userRef, { balance: targetUser.balance + order.price });
+          await userRef.update({ balance: targetUser.balance + order.price });
        }
     }
     
     // Handle Refund on Cancellation (Wallet only)
     if (order.type === 'purchase' && status === 'cancelled' && order.status !== 'cancelled') {
         if (order.paymentMethod === 'wallet') {
-          const userRef = doc(db, 'users', order.userId);
+          const userRef = db.collection('users').doc(order.userId);
           const targetUser = allUsers.find(u => u.id === order.userId);
           if (targetUser) {
-              await updateDoc(userRef, { balance: targetUser.balance + order.price });
+              await userRef.update({ balance: targetUser.balance + order.price });
           }
         }
     }
 
-    await updateDoc(orderRef, { status });
+    await orderRef.update({ status });
   };
 
   const updateConfig = async (newConfig: Partial<AppConfig>) => {
-    const configRef = doc(db, 'settings', 'appConfig');
-    await setDoc(configRef, { ...config, ...newConfig });
+    const configRef = db.collection('settings').doc('appConfig');
+    // Using set with merge or update if exists. Since seeded, likely update.
+    // Using set with merge to be safe
+    await configRef.set({ ...config, ...newConfig }, { merge: true });
   };
 
   const addProduct = async (product: Product) => {
-    await setDoc(doc(db, 'products', product.id), product);
+    await db.collection('products').doc(product.id).set(product);
   };
   
   const updateProduct = async (id: string, updatedProduct: Product) => {
-    await setDoc(doc(db, 'products', id), updatedProduct);
+    await db.collection('products').doc(id).set(updatedProduct);
   };
   
   const deleteProduct = async (id: string) => {
-    await deleteDoc(doc(db, 'products', id));
+    await db.collection('products').doc(id).delete();
   };
 
   return (
