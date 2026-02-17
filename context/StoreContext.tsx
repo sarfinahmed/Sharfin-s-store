@@ -13,11 +13,11 @@ import {
   getDoc 
 } from 'firebase/firestore';
 
-const {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut
+const { 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut 
 } = firebaseAuth;
 
 // Mock Data Defaults (Used for initial seeding only)
@@ -131,7 +131,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // 5. Auth State Listener & User Sync
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: any) => {
       if (firebaseUser) {
         // Fetch or Create user in Firestore
         const userRef = doc(db, 'users', firebaseUser.uid);
